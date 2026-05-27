@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Caroline — Programa 5K</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --navy: #0F3D5C;
+    --navy-dark: #08283D;
+    --accent: #E07A2B;
+    --accent-light: #F4A05E;
+    --light: #F1F5F8;
+    --lighter: #F8FAFC;
+    --green: #2D8659;
+    --green-bg: #D4EDDA;
+    --yellow-bg: #FFF3CD;
+    --red-bg: #F8D7DA;
+    --grey: #4A4A4A;
+    --grey-light: #9CA8B2;
+    --border: #D8DFE6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--light); color: var(--grey); padding: 12px; line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  .header {
+    background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 100%);
+    color: white; border-radius: 14px; padding: 24px;
+    margin-bottom: 16px; box-shadow: 0 4px 16px rgba(15,61,92,0.18);
+    position: relative; overflow: hidden;
+  }
+  .header::before {
+    content: ''; position: absolute; right: -50px; top: -50px;
+    width: 200px; height: 200px; background: rgba(224,122,43,0.1);
+    border-radius: 50%;
+  }
+  .header h1 { font-size: clamp(20px, 5vw, 26px); margin-bottom: 4px; position: relative; }
+  .header p { opacity: 0.85; font-size: 13px; position: relative; }
+  .header .meta {
+    display: flex; gap: 8px; margin-top: 14px; font-size: 12px;
+    flex-wrap: wrap; position: relative;
+  }
+  .header .meta span {
+    background: rgba(255,255,255,0.12); padding: 5px 11px; border-radius: 8px;
+  }
+
+  .status-bar {
+    background: white; border-radius: 10px; padding: 10px 14px;
+    margin-bottom: 16px; font-size: 12px; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px;
+    border: 1px solid var(--border);
+  }
+  .status-bar .last-update { color: var(--grey-light); }
+  .status-bar button {
+    background: var(--accent); color: white; border: none;
+    padding: 6px 14px; border-radius: 6px; font-size: 12px;
+    cursor: pointer; font-weight: 600;
+  }
+  .status-bar button:hover { background: #c66a23; }
+  .status-bar button:disabled { background: var(--grey-light); }
+
+  .grid { display: grid; gap: 12px; margin-bottom: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 720px) {
+    .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 420px) {
+    .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: white; border-radius: 12px; padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid var(--border);
+  }
+  .card h3 {
+    color: var(--navy); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 700;
+  }
+  .kpi { font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .kpi-sub { font-size: 12px; color: var(--grey-light); margin-top: 2px; }
+  .kpi-trend { font-size: 12px; margin-top: 4px; font-weight: 600; }
+  .trend-good { color: var(--green); }
+  .trend-bad { color: #C0392B; }
+
+  .section {
+    background: white; border-radius: 12px; padding: 18px;
+    margin-bottom: 16px; border: 1px solid var(--border);
+  }
+  .section h2 {
+    color: var(--navy); font-size: 16px; margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--accent);
+  }
+
+  .progress-label {
+    display: flex; justify-content: space-between; font-size: 12px;
+    margin-bottom: 5px; margin-top: 10px;
+  }
+  .progress-label:first-child { margin-top: 0; }
+  .progress-bar {
+    background: #E8EDF1; height: 12px; border-radius: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    transition: width 0.6s ease;
+  }
+  .progress-fill.complete {
+    background: linear-gradient(90deg, var(--green), #4caf7d);
+  }
+
+  .chart-container { position: relative; height: 240px; margin-top: 8px; }
+
+  .session-log { max-height: 320px; overflow-y: auto; }
+  .session-item {
+    padding: 10px 12px; border-left: 4px solid var(--accent);
+    background: var(--lighter); border-radius: 6px; margin-bottom: 8px;
+  }
+  .session-item.missed { border-left-color: #C0392B; opacity: 0.7; }
+  .session-item.partial { border-left-color: #f0ad4e; }
+  .session-item .date {
+    font-weight: 700; color: var(--navy); font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .session-item .tipo {
+    background: var(--accent); color: white; padding: 2px 8px;
+    border-radius: 10px; font-size: 10px; font-weight: 600;
+    text-transform: uppercase;
+  }
+  .session-item .metrics {
+    display: flex; gap: 6px; margin-top: 8px; font-size: 11px;
+    flex-wrap: wrap;
+  }
+  .session-item .metrics span {
+    background: white; padding: 3px 8px; border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .session-item .notes {
+    font-size: 11px; color: var(--grey); margin-top: 6px; font-style: italic;
+  }
+
+  .week-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-top: 10px;
+  }
+  @media (max-width: 600px) {
+    .week-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .week-cell {
+    background: var(--lighter); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 6px; text-align: center;
+    font-size: 11px; position: relative;
+  }
+  .week-cell.done {
+    background: var(--green-bg); border-color: var(--green);
+  }
+  .week-cell.partial {
+    background: var(--yellow-bg); border-color: #f0ad4e;
+  }
+  .week-cell.current {
+    background: white; border: 2px solid var(--accent);
+    box-shadow: 0 0 0 3px rgba(224,122,43,0.15);
+  }
+  .week-cell.missed {
+    background: var(--red-bg); border-color: #C0392B;
+  }
+  .week-cell .num {
+    font-weight: 700; color: var(--navy); font-size: 13px;
+    display: block; margin-bottom: 2px;
+  }
+  .week-cell .ratio {
+    color: var(--grey); font-size: 10px;
+  }
+
+  .alert-box {
+    background: #FFF8E1; border-left: 4px solid var(--accent);
+    padding: 11px 14px; border-radius: 6px; font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .footer-cta {
+    background: var(--navy); color: white; border-radius: 12px;
+    padding: 18px; text-align: center; margin-top: 20px;
+  }
+  .footer-cta a {
+    color: var(--accent-light); text-decoration: none; font-weight: 600;
+  }
+
+  .loading {
+    text-align: center; padding: 60px 20px; color: var(--grey-light);
+  }
+  .loading-spinner {
+    border: 3px solid var(--light);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%; width: 32px; height: 32px;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 14px;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .empty-state {
+    text-align: center; padding: 30px 20px; color: var(--grey-light);
+    font-size: 13px;
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 8px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>🏃‍♀️ Programa 5K — Caroline</h1>
+    <p>24 semanas para correr 5 km contínuos + emagrecimento</p>
+    <div class="meta">
+      <span>📅 Início: 27/mai/2026</span>
+      <span>🎯 Meta: 5K em ~38 min</span>
+      <span>⚖️ Peso inicial: 83,0 kg</span>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span class="last-update" id="lastUpdate">Carregando dados...</span>
+    <button onclick="loadData()" id="refreshBtn">🔄 Atualizar</button>
+  </div>
+
+  <!-- LOADING / CONTENT -->
+  <div id="loading" class="loading">
+    <div class="loading-spinner"></div>
+    Buscando seus dados de treino...
+  </div>
+
+  <div id="content" class="hidden">
+
+    <!-- KPIs -->
+    <div class="grid grid-4">
+      <div class="card">
+        <h3>Semana atual</h3>
+        <div class="kpi" id="currentWeek">—</div>
+        <div class="kpi-sub" id="currentPhase">—</div>
+      </div>
+      <div class="card">
+        <h3>Sessões esta sem.</h3>
+        <div class="kpi" id="weekSessions">—</div>
+        <div class="kpi-sub" id="weekSessionsSub">de 3 planejadas</div>
+      </div>
+      <div class="card">
+        <h3>Aderência geral</h3>
+        <div class="kpi" id="adherence">—</div>
+        <div class="kpi-sub">do programa</div>
+      </div>
+      <div class="card">
+        <h3>Maior dist. contínua</h3>
+        <div class="kpi" id="maxDist">—</div>
+        <div class="kpi-sub" id="maxDistSub">km — meta: 5 km</div>
+      </div>
+    </div>
+
+    <!-- PROGRESSO -->
+    <div class="section">
+      <h2>📈 Progresso geral</h2>
+      <div class="progress-label">
+        <span><strong>Programa</strong> <span id="progLabel">— de 24 semanas</span></span>
+        <span id="progPct">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progBar" style="width: 0%;"></div></div>
+
+      <div class="progress-label">
+        <span><strong>Distância máxima contínua</strong></span>
+        <span id="distPct">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="distBar" style="width: 0%;"></div></div>
+
+      <div class="progress-label">
+        <span><strong>Peso</strong> <span id="weightLabel">— sem nova medição</span></span>
+        <span id="weightPct">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="weightBar" style="width: 0%;"></div></div>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>📉 Evolução do pace (min/km)</h3>
+        <div class="chart-container"><canvas id="paceChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>❤️ FC média por sessão</h3>
+        <div class="chart-container"><canvas id="hrChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>📏 Distância contínua máxima (km)</h3>
+        <div class="chart-container"><canvas id="distChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>⚖️ Peso corporal (kg)</h3>
+        <div class="chart-container"><canvas id="weightChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CRONOGRAMA -->
+    <div class="section">
+      <h2>📅 24 semanas — visão geral</h2>
+      <div class="week-grid" id="weekGrid"></div>
+    </div>
+
+    <!-- LOG DE SESSÕES -->
+    <div class="section">
+      <h2>📋 Últimas sessões</h2>
+      <div class="session-log" id="sessionLog"></div>
+    </div>
+
+    <!-- INSIGHTS -->
+    <div class="section">
+      <h2>💡 Insight da semana</h2>
+      <div class="alert-box" id="weekInsight">Carregando...</div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-cta">
+    <strong>Você não precisa estar motivada todos os dias.</strong><br>
+    Você precisa apenas <span style="color: var(--accent-light);">aparecer 3 vezes por semana</span>.
+  </div>
+
+  <div style="text-align: center; padding: 16px; color: #888; font-size: 11px;">
+    Dashboard em tempo real • Atualiza automaticamente da planilha
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURAÇÃO — só precisa alterar uma linha
+// ============================================================
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSBI-qhr__fYlkg7PN7XnQxUkV0-5iHON_1-JMJnWInTrMjpyC7U7tjl0h72RcGhb-1ptKvQKc-iH-c/pub?gid=77275753&single=true&output=csv';
+
+// Para teste local sem planilha conectada, use dados de exemplo:
+const USE_DEMO_DATA = false; // true para ver com dados fictícios
+
+// ============================================================
+// PLANO COMPLETO DE 24 SEMANAS (estrutura fixa)
+// ============================================================
+const PROGRAM = {
+  1: { phase: 'Mês 1 — Religação', sessions: 3, big: '~28 min' },
+  2: { phase: 'Mês 1 — Religação', sessions: 3, big: '~34 min' },
+  3: { phase: 'Mês 1 — Religação', sessions: 3, big: '~34 min' },
+  4: { phase: 'Mês 1 — Descarga', sessions: 3, big: '~31 min' },
+  5: { phase: 'Mês 2 — Base aeróbica', sessions: 3, big: '~35 min' },
+  6: { phase: 'Mês 2 — Base aeróbica', sessions: 3, big: '~38 min' },
+  7: { phase: 'Mês 2 — Base aeróbica', sessions: 3, big: '~40 min' },
+  8: { phase: 'Mês 2 — Descarga', sessions: 3, big: '~30 min' },
+  9: { phase: 'Mês 3 — Continuidade', sessions: 3, big: '~38 min' },
+  10: { phase: 'Mês 3 — Continuidade', sessions: 3, big: '~37 min' },
+  11: { phase: 'Mês 3 — Continuidade', sessions: 3, big: '~40 min' },
+  12: { phase: 'Mês 3 — Teste 3K', sessions: 3, big: '~30 min' },
+  13: { phase: 'Mês 4 — Volume contínuo', sessions: 3, big: '~35 min' },
+  14: { phase: 'Mês 4 — Volume contínuo', sessions: 3, big: '~38 min' },
+  15: { phase: 'Mês 4 — Volume contínuo', sessions: 3, big: '~42 min' },
+  16: { phase: 'Mês 4 — Teste 4K', sessions: 3, big: '~35 min' },
+  17: { phase: 'Mês 5 — Especificidade', sessions: 3, big: '~45 min' },
+  18: { phase: 'Mês 5 — Primeiro 5K!', sessions: 3, big: '~50 min' },
+  19: { phase: 'Mês 5 — Especificidade', sessions: 3, big: '~50 min' },
+  20: { phase: 'Mês 5 — Descarga', sessions: 3, big: '~35 min' },
+  21: { phase: 'Mês 6 — Consolidação', sessions: 3, big: '~50 min' },
+  22: { phase: 'Mês 6 — Consolidação', sessions: 3, big: '~55 min' },
+  23: { phase: 'Mês 6 — Consolidação', sessions: 3, big: '~38 min' },
+  24: { phase: 'Mês 6 — Teste FINAL', sessions: 3, big: '~55 min' },
+};
+
+const START_DATE = new Date(2026, 4, 26); // 26 mai 2026 (mês 0-indexed)
+const INITIAL_WEIGHT = 83.0;
+
+// ============================================================
+// DADOS DE DEMONSTRAÇÃO (para teste sem planilha)
+// ============================================================
+const DEMO_SESSIONS = [
+  { data: '2026-05-27', semana: 1, tipo: 'Run-walk', distancia: 2.4, pace: 8.10, fc_media: 142, fc_max: 168, concluido: 'Sim', peso: 83.0, rpe: 5, notas: 'Primeira sessão de retorno! Senti pernas pesadas no início' },
+  { data: '2026-05-29', semana: 1, tipo: 'Run-walk', distancia: 2.5, pace: 7.95, fc_media: 138, fc_max: 165, concluido: 'Sim', peso: '', rpe: 4, notas: 'Mais leve hoje, achei melhor o ritmo' },
+];
+
+// ============================================================
+// LÓGICA PRINCIPAL
+// ============================================================
+let sessions = [];
+let charts = {};
+
+function calcCurrentWeek() {
+  const today = new Date();
+  const diff = today - START_DATE;
+  const weeks = Math.floor(diff / (1000*60*60*24*7)) + 1;
+  return Math.max(1, Math.min(24, weeks));
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // Aceita YYYY-MM-DD ou DD/MM/YYYY
+  if (str.includes('-')) {
+    const [y, m, d] = str.split('-');
+    return new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  }
+  if (str.includes('/')) {
+    const [d, m, y] = str.split('/');
+    return new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  }
+  return new Date(str);
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'short'});
+}
+
+async function loadData() {
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('content').classList.add('hidden');
+  document.getElementById('refreshBtn').disabled = true;
+
+  try {
+    if (USE_DEMO_DATA || SHEET_CSV_URL.includes('__COLAR_URL')) {
+      console.log('Modo demo ativo');
+      sessions = DEMO_SESSIONS.map(s => ({
+        ...s,
+        dataObj: parseDate(s.data),
+        distancia: parseFloat(s.distancia) || 0,
+        pace: parseFloat(s.pace) || 0,
+        fc_media: parseInt(s.fc_media) || 0,
+        peso: parseFloat(s.peso) || null,
+        rpe: parseInt(s.rpe) || null,
+        semana: parseInt(s.semana) || 0,
+      }));
+    } else {
+      const res = await fetch(SHEET_CSV_URL);
+      const text = await res.text();
+      const parsed = Papa.parse(text, {header: true, skipEmptyLines: true});
+
+      sessions = parsed.data
+        .filter(r => r.Data && r.Data.trim() !== '')
+        .map(r => ({
+          data: r.Data,
+          dataObj: parseDate(r.Data),
+          semana: parseInt(r.Semana) || 0,
+          tipo: r.Tipo || 'Corrida',
+          distancia: parseFloat(String(r['Distancia (km)'] || r.Distancia || '0').replace(',', '.')) || 0,
+          pace: parseFloat(String(r['Pace (min/km)'] || r.Pace || '0').replace(',', '.')) || 0,
+          fc_media: parseInt(r['FC media'] || r.FC || '0') || 0,
+          fc_max: parseInt(r['FC max'] || '0') || 0,
+          concluido: r['Concluido'] || r.Concluído || 'Sim',
+          peso: r.Peso ? parseFloat(String(r.Peso).replace(',', '.')) : null,
+          rpe: r.RPE ? parseInt(r.RPE) : null,
+          notas: r.Notas || r['Notas / Sensacoes'] || '',
+        }))
+        .filter(s => s.dataObj && !isNaN(s.dataObj));
+
+      sessions.sort((a, b) => a.dataObj - b.dataObj);
+    }
+
+    renderAll();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('content').classList.remove('hidden');
+    document.getElementById('lastUpdate').textContent =
+      'Última atualização: ' + new Date().toLocaleString('pt-BR');
+  } catch (err) {
+    console.error('Erro:', err);
+    document.getElementById('loading').innerHTML =
+      `<div style="color:#C0392B; padding: 20px;">
+        <strong>⚠️ Erro ao carregar dados</strong><br>
+        ${err.message}<br><br>
+        Verifique se a URL da planilha está configurada e pública.
+       </div>`;
+  } finally {
+    document.getElementById('refreshBtn').disabled = false;
+  }
+}
+
+function renderAll() {
+  renderKPIs();
+  renderProgress();
+  renderCharts();
+  renderWeekGrid();
+  renderSessionLog();
+  renderInsight();
+}
+
+function renderKPIs() {
+  const cw = calcCurrentWeek();
+  document.getElementById('currentWeek').textContent = cw + ' / 24';
+  document.getElementById('currentPhase').textContent = PROGRAM[cw]?.phase || '—';
+
+  // Sessões esta semana
+  const weekStart = new Date(START_DATE);
+  weekStart.setDate(weekStart.getDate() + (cw-1)*7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const thisWeek = sessions.filter(s =>
+    s.dataObj >= weekStart && s.dataObj < weekEnd && s.concluido === 'Sim'
+  );
+  document.getElementById('weekSessions').textContent = thisWeek.length + ' / 3';
+
+  // Aderência geral
+  const totalCompleted = sessions.filter(s => s.concluido === 'Sim').length;
+  const weeksElapsed = Math.min(cw, 24);
+  const totalPlanned = weeksElapsed * 3;
+  const adh = totalPlanned > 0 ? Math.round(totalCompleted/totalPlanned*100) : 0;
+  document.getElementById('adherence').textContent = adh + '%';
+
+  // Maior distância contínua (só sessões com trote contínuo)
+  const maxDist = Math.max(0, ...sessions
+    .filter(s => s.concluido === 'Sim' && (s.tipo.toLowerCase().includes('contínuo') || s.tipo.toLowerCase().includes('continuo') || s.tipo.toLowerCase().includes('teste') || s.tipo.toLowerCase().includes('5k') || s.tipo.toLowerCase().includes('longão')))
+    .map(s => s.distancia));
+  document.getElementById('maxDist').textContent = maxDist.toFixed(1);
+  document.getElementById('maxDistSub').textContent =
+    `de 5 km — ${Math.min(100, Math.round(maxDist/5*100))}% do objetivo`;
+}
+
+function renderProgress() {
+  const cw = calcCurrentWeek();
+  const progPct = Math.round(cw/24*100);
+  document.getElementById('progLabel').textContent = `(semana ${cw} de 24)`;
+  document.getElementById('progPct').textContent = progPct + '%';
+  document.getElementById('progBar').style.width = progPct + '%';
+
+  const maxDist = Math.max(0, ...sessions
+    .filter(s => s.concluido === 'Sim')
+    .map(s => s.distancia));
+  const distPct = Math.min(100, Math.round(maxDist/5*100));
+  document.getElementById('distPct').textContent = distPct + '%';
+  document.getElementById('distBar').style.width = distPct + '%';
+  if (distPct >= 100) document.getElementById('distBar').classList.add('complete');
+
+  // Peso: comparar peso mais recente com inicial
+  const weights = sessions.filter(s => s.peso).map(s => s.peso);
+  const lastWeight = weights.length ? weights[weights.length-1] : INITIAL_WEIGHT;
+  const lost = INITIAL_WEIGHT - lastWeight;
+  const weightLabel = lost > 0
+    ? `(${lastWeight.toFixed(1)} kg — perdeu ${lost.toFixed(1)} kg)`
+    : (weights.length ? `(${lastWeight.toFixed(1)} kg)` : '(sem nova medição)');
+  document.getElementById('weightLabel').textContent = weightLabel;
+  // Meta: 7 kg em 6 meses (cenário moderado)
+  const wPct = Math.min(100, Math.round(Math.max(0, lost)/7*100));
+  document.getElementById('weightPct').textContent = wPct + '%';
+  document.getElementById('weightBar').style.width = wPct + '%';
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function renderCharts() {
+  Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#4A4A4A';
+
+  const navy = '#0F3D5C';
+  const accent = '#E07A2B';
+
+  const completedSessions = sessions.filter(s =>
+    s.concluido === 'Sim' && s.distancia > 0);
+  const labels = completedSessions.map(s => fmtDate(s.dataObj));
+
+  // Pace
+  destroyChart('pace');
+  charts['pace'] = new Chart(document.getElementById('paceChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Pace (min/km)',
+        data: completedSessions.map(s => s.pace || null),
+        borderColor: accent,
+        backgroundColor: 'rgba(224, 122, 43, 0.1)',
+        tension: 0.3, fill: true, pointRadius: 4,
+        pointBackgroundColor: accent,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { reverse: true, suggestedMin: 6, suggestedMax: 10,
+        ticks: { callback: v => v.toFixed(1) }
+      } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // FC
+  destroyChart('hr');
+  charts['hr'] = new Chart(document.getElementById('hrChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'FC média',
+        data: completedSessions.map(s => s.fc_media || null),
+        borderColor: '#C0392B',
+        backgroundColor: 'rgba(192, 57, 43, 0.1)',
+        tension: 0.3, fill: true, pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { min: 100, max: 200,
+        ticks: { callback: v => v + ' bpm' }
+      } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Distância — barra
+  destroyChart('dist');
+  const distData = completedSessions.map(s => s.distancia);
+  charts['dist'] = new Chart(document.getElementById('distChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Distância (km)',
+        data: distData,
+        backgroundColor: 'rgba(15, 61, 92, 0.7)',
+        borderColor: navy, borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, suggestedMax: 6 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Peso
+  destroyChart('weight');
+  const weightSessions = sessions.filter(s => s.peso);
+  const weightLabels = ['Início', ...weightSessions.map(s => fmtDate(s.dataObj))];
+  const weightData = [INITIAL_WEIGHT, ...weightSessions.map(s => s.peso)];
+  charts['weight'] = new Chart(document.getElementById('weightChart'), {
+    type: 'line',
+    data: {
+      labels: weightLabels,
+      datasets: [{
+        label: 'Peso (kg)',
+        data: weightData,
+        borderColor: '#27AE60',
+        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+        tension: 0.2, fill: true, pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { suggestedMin: 73, suggestedMax: 85 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function renderWeekGrid() {
+  const grid = document.getElementById('weekGrid');
+  const cw = calcCurrentWeek();
+  let html = '';
+  for (let w = 1; w <= 24; w++) {
+    const wSessions = sessions.filter(s => s.semana === w && s.concluido === 'Sim').length;
+    const wPlanned = 3;
+    let cls = '';
+    if (w === cw) cls = 'current';
+    else if (w < cw) {
+      if (wSessions >= wPlanned) cls = 'done';
+      else if (wSessions >= 2) cls = 'partial';
+      else cls = 'missed';
+    }
+    html += `<div class="week-cell ${cls}">
+      <span class="num">S${w}</span>
+      <span class="ratio">${wSessions}/${wPlanned}</span>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function renderSessionLog() {
+  const log = document.getElementById('sessionLog');
+  if (sessions.length === 0) {
+    log.innerHTML = `<div class="empty-state">
+      <div class="icon">📲</div>
+      Nenhuma sessão registrada ainda.<br>
+      Preencha a planilha após cada treino — o dashboard atualiza automaticamente.
+    </div>`;
+    return;
+  }
+  const recent = [...sessions].reverse().slice(0, 10);
+  log.innerHTML = recent.map(s => {
+    let cls = 'session-item';
+    if (s.concluido === 'Não') cls += ' missed';
+    if (s.concluido === 'Parcial') cls += ' partial';
+    const metrics = [];
+    if (s.distancia) metrics.push(`📏 ${s.distancia.toFixed(2)} km`);
+    if (s.pace) metrics.push(`⏱️ ${s.pace.toFixed(2)}/km`);
+    if (s.fc_media) metrics.push(`❤️ ${s.fc_media} bpm`);
+    if (s.rpe) metrics.push(`💪 RPE ${s.rpe}`);
+    if (s.peso) metrics.push(`⚖️ ${s.peso} kg`);
+    return `
+      <div class="${cls}">
+        <div class="date">
+          ${fmtDate(s.dataObj)} • Semana ${s.semana}
+          <span class="tipo">${s.tipo}</span>
+        </div>
+        <div class="metrics">${metrics.map(m => `<span>${m}</span>`).join('')}</div>
+        ${s.notas ? `<div class="notes">"${s.notas}"</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderInsight() {
+  const cw = calcCurrentWeek();
+  const phase = PROGRAM[cw]?.phase || '';
+  const completedThisWeek = sessions.filter(s => s.semana === cw && s.concluido === 'Sim').length;
+
+  let msg = '';
+  if (sessions.length === 0) {
+    msg = `<strong>Semana 1 — vamos lá!</strong> O único objetivo é APARECER 3 vezes. Não cronometre, não compare pace. Foco em FC: o trote deve manter você entre 117–137 bpm (Z2). Se subir mais, diminua o ritmo — pode ser quase caminhada acelerada.`;
+  } else if (cw <= 4) {
+    msg = `<strong>Mês 1 — Religação.</strong> Foco TOTAL em frequência. Já fez ${completedThisWeek}/3 sessões esta semana. ${completedThisWeek >= 3 ? '🎉 Semana completa!' : 'Continue, cada sessão conta dobro nesta fase.'}`;
+  } else if (cw <= 8) {
+    msg = `<strong>Mês 2 — Base aeróbica.</strong> Observe sua FC: deveria estar caindo gradualmente para o mesmo esforço. Inicie a Fase 1 da pliometria nos dias de musculação.`;
+  } else if (cw <= 12) {
+    msg = `<strong>Mês 3 — Continuidade.</strong> Os primeiros trotes contínuos longos chegaram. Confie no processo. Semana 12 tem o teste de 3 km contínuos — você consegue.`;
+  } else if (cw <= 16) {
+    msg = `<strong>Mês 4 — Volume contínuo.</strong> Adeus caminhadas dentro do treino curto. Mantenha 80% em Z2, apenas 1 dia/semana em Z3.`;
+  } else if (cw <= 20) {
+    msg = `<strong>Mês 5 — Especificidade.</strong> Semana 18 tem o PRIMEIRO 5K. Confie. Você está mais forte do que pensa.`;
+  } else {
+    msg = `<strong>Mês 6 — Consolidação.</strong> Reta final. Semana 24: teste cronometrado de 5 km. Meta: ~38 min. Mas o ganho real é o hábito enraizado.`;
+  }
+
+  document.getElementById('weekInsight').innerHTML = msg;
+}
+
+// ============================================================
+// INICIALIZAÇÃO
+// ============================================================
+window.addEventListener('load', loadData);
+
+// Auto-refresh a cada 5 minutos
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+</body>
+</html>
