@@ -1824,6 +1824,7 @@ function showToast(msg, isError = false) {
 async function loadData() {
   document.getElementById('refreshBtn').disabled = true;
 
+  let fetchError = null;
   try {
     let rawRows = [];
     if (USE_DEMO_DATA || SHEET_CSV_URL.includes('__COLAR_URL')) {
@@ -1867,39 +1868,55 @@ async function loadData() {
         s.calorias = s.caloriasEst;
       }
     });
+  } catch (err) {
+    console.error('Erro de fetch:', err);
+    fetchError = err;
+    // NÃO retorna! Continua para renderizar o que dá
+  }
 
+  // Mostrar conteúdo SEMPRE — mesmo que fetch tenha falhado, renderToday e renderWeekOverview
+  // funcionam só com o calendário (PROGRAM) e não dependem de dados da planilha
+  try {
     renderAll();
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('content').classList.remove('hidden');
+  } catch (renderErr) {
+    console.error('Erro de render:', renderErr);
+  }
+
+  // Atualizar status bar
+  if (fetchError) {
+    document.getElementById('lastUpdate').innerHTML =
+      `<span style="color: var(--red);">⚠️ Erro ao carregar dados: ${fetchError.message}</span>`;
+  } else {
     document.getElementById('lastUpdate').textContent =
       'Atualizado: ' + new Date().toLocaleString('pt-BR');
-  } catch (err) {
-    console.error('Erro:', err);
-    document.getElementById('loading').innerHTML =
-      `<div style="color: var(--red); padding: 20px;">
-        <strong>⚠️ Erro ao carregar dados</strong><br>
-        ${err.message}<br><br>
-        Verifique se a URL da planilha está configurada e pública.
-       </div>`;
-    renderToday();
-  } finally {
-    document.getElementById('refreshBtn').disabled = false;
   }
+
+  document.getElementById('refreshBtn').disabled = false;
 }
 
 // ============================================================
 // RENDERIZAÇÃO
 // ============================================================
 function renderAll() {
-  renderToday();
-  renderWeekOverview();
-  renderKPIs();
-  renderSummaries();
-  renderProgress();
-  renderCharts();
-  renderWeekGrid();
-  renderSessionLog();
-  renderInsight();
+  // Isola cada render — se um falhar, os outros continuam funcionando
+  const safeCall = (name, fn) => {
+    try { fn(); }
+    catch (e) {
+      console.error(`Erro em ${name}:`, e);
+    }
+  };
+
+  safeCall('renderToday', renderToday);
+  safeCall('renderWeekOverview', renderWeekOverview);
+  safeCall('renderKPIs', renderKPIs);
+  safeCall('renderSummaries', renderSummaries);
+  safeCall('renderProgress', renderProgress);
+  safeCall('renderCharts', renderCharts);
+  safeCall('renderWeekGrid', renderWeekGrid);
+  safeCall('renderSessionLog', renderSessionLog);
+  safeCall('renderInsight', renderInsight);
 }
 
 function getWeekRange(weekNum) {
