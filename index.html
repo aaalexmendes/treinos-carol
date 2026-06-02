@@ -578,6 +578,74 @@
     padding: 2px 8px; border-radius: 10px;
     font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
   }
+
+  /* Navegação da semana */
+  .week-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 4px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .week-header h2 { color: var(--navy); font-size: 16px; }
+  .week-nav {
+    width: 36px; height: 36px; padding: 0; font-size: 18px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .week-nav:disabled {
+    opacity: 0.35; cursor: not-allowed;
+  }
+
+  /* Grid compacta de 24 semanas */
+  .weeks24-row {
+    display: grid; grid-template-columns: repeat(24, 1fr);
+    gap: 3px; margin-top: 4px;
+  }
+  @media (max-width: 600px) {
+    .weeks24-row { grid-template-columns: repeat(12, 1fr); }
+  }
+  .week24-cell {
+    aspect-ratio: 1; min-height: 22px;
+    border-radius: 4px; background: var(--border);
+    cursor: pointer; transition: transform 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: var(--grey-light);
+    border: 1.5px solid transparent;
+  }
+  .week24-cell:hover { transform: scale(1.15); }
+  .week24-cell.done { background: var(--green); color: white; }
+  .week24-cell.partial { background: #f0ad4e; color: white; }
+  .week24-cell.missed { background: var(--red); color: white; }
+  .week24-cell.future { background: var(--lighter); color: var(--grey-light); }
+  .week24-cell.current {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 2px rgba(15,61,92,0.2);
+  }
+  .week24-cell.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(224,122,43,0.3);
+    transform: scale(1.1);
+  }
+
+  /* Frase motivacional */
+  .motivational-quote {
+    background: linear-gradient(135deg, #fff7ed 0%, #fff 100%);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    position: relative;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .motivational-quote .quote-icon {
+    font-size: 32px; flex-shrink: 0;
+  }
+  .motivational-quote .quote-text {
+    font-size: 14px; color: var(--navy); font-weight: 500;
+    line-height: 1.4; font-style: italic;
+  }
+  .motivational-quote .quote-author {
+    font-size: 11px; color: var(--grey-light); margin-top: 4px;
+    font-style: normal;
+  }
 </style>
 </head>
 <body>
@@ -591,6 +659,15 @@
       <span>📅 Início: 26/mai/2026</span>
       <span>🎯 Meta: 5K em ~38 min</span>
       <span>⚖️ Peso inicial: 83,0 kg</span>
+    </div>
+  </div>
+
+  <!-- FRASE MOTIVACIONAL DO DIA -->
+  <div class="motivational-quote" id="motivationalQuote">
+    <div class="quote-icon">💪</div>
+    <div>
+      <div class="quote-text" id="quoteText">Carregando...</div>
+      <div class="quote-author" id="quoteAuthor"></div>
     </div>
   </div>
 
@@ -610,11 +687,23 @@
 
   <!-- ============ SEMANA INTEIRA ============ -->
   <div class="section">
-    <h2>📆 Esta semana — visão geral</h2>
-    <div style="font-size: 12px; color: var(--grey-light); margin-bottom: 4px;">
-      O dia destacado em laranja é o próximo treino. Clique em qualquer dia para ver detalhes.
+    <div class="week-header">
+      <button class="btn btn-secondary week-nav" id="weekNavPrev" onclick="navWeek(-1)">‹</button>
+      <h2 id="weekTitle" style="margin: 0; border: none; padding: 0; flex: 1; text-align: center;">📆 Esta semana</h2>
+      <button class="btn btn-secondary week-nav" id="weekNavNext" onclick="navWeek(1)">›</button>
+    </div>
+    <div style="font-size: 12px; color: var(--grey-light); margin-bottom: 8px; text-align: center;">
+      <span id="weekSubtitle">—</span>
     </div>
     <div class="week-overview" id="weekOverview"></div>
+
+    <!-- Grid compacta de 24 semanas -->
+    <div class="weeks24-compact" style="margin-top: 16px;">
+      <div style="font-size: 11px; color: var(--grey-light); margin-bottom: 6px;">
+        <strong>24 semanas:</strong> verde = completa, amarelo = parcial, vermelho = perdida. Clique numa semana para abri-la.
+      </div>
+      <div class="weeks24-row" id="weeks24Row"></div>
+    </div>
   </div>
 
   <!-- STATUS BAR -->
@@ -753,12 +842,6 @@
         <h3>⚖️ Peso corporal (kg)</h3>
         <div class="chart-container"><canvas id="weightChart"></canvas></div>
       </div>
-    </div>
-
-    <div class="section">
-      <h2>📅 Aderência da corrida — 24 semanas</h2>
-      <div style="font-size: 12px; color: var(--grey-light); margin-bottom: 6px;">Cada quadrado é uma semana. Verde = 3/3 corridas feitas. Amarelo = 2/3. Vermelho = 0–1/3.</div>
-      <div class="week-grid" id="weekGrid"></div>
     </div>
 
     <div class="section">
@@ -1042,11 +1125,42 @@ let selectedRPE = null;
 // ============================================================
 // UTILS
 // ============================================================
-function calcCurrentWeek() {
-  const today = new Date();
-  const diff = today - START_DATE;
-  const weeks = Math.floor(diff / (1000*60*60*24*7)) + 1;
+// Semana é definida pelo bloco SEGUNDA-DOMINGO que contém o dia.
+// Semana 1 = a primeira semana com o START_DATE dentro (26/mai/2026 = ter, semana 1 vai de 25/mai a 31/mai).
+// Semana 2 começa na segunda seguinte (1/jun).
+function calcWeekFor(date) {
+  // Achar a segunda-feira da semana de `date`
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  const dow = (d.getDay() + 6) % 7; // 0=seg, 6=dom
+  const mondayOfDate = new Date(d);
+  mondayOfDate.setDate(d.getDate() - dow);
+
+  // Segunda-feira da semana 1 (que contém o START_DATE)
+  const startDow = (START_DATE.getDay() + 6) % 7;
+  const mondayWeek1 = new Date(START_DATE);
+  mondayWeek1.setHours(0,0,0,0);
+  mondayWeek1.setDate(START_DATE.getDate() - startDow);
+
+  const diffMs = mondayOfDate - mondayWeek1;
+  const weeks = Math.round(diffMs / (1000*60*60*24*7)) + 1;
   return Math.max(1, Math.min(24, weeks));
+}
+
+function calcCurrentWeek() {
+  return calcWeekFor(new Date());
+}
+
+// Retorna a segunda-feira de uma dada semana do programa (1 a 24)
+function getMondayOfWeek(weekNum) {
+  const startDow = (START_DATE.getDay() + 6) % 7;
+  const mondayWeek1 = new Date(START_DATE);
+  mondayWeek1.setHours(0,0,0,0);
+  mondayWeek1.setDate(START_DATE.getDate() - startDow);
+
+  const result = new Date(mondayWeek1);
+  result.setDate(mondayWeek1.getDate() + (weekNum - 1) * 7);
+  return result;
 }
 
 function parseDate(str) {
@@ -1354,40 +1468,65 @@ function renderWorkoutDetail(runDetail, uniqueId) {
 // ============================================================
 // RENDERIZAÇÃO DA SEMANA INTEIRA
 // ============================================================
+// Semana sendo visualizada (pode ser diferente da semana atual)
+let viewingWeek = null; // será setado no init
+
 function renderWeekOverview() {
   const today = new Date();
   today.setHours(0,0,0,0);
-  // Achar a segunda-feira da semana atual
-  const dayIdx = (today.getDay() + 6) % 7; // 0=seg
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - dayIdx);
+  const currentWeek = calcCurrentWeek();
+
+  // Se viewingWeek não foi setado ainda, usa a semana atual
+  if (viewingWeek === null) viewingWeek = currentWeek;
+
+  const weekNum = viewingWeek;
+  const monday = getMondayOfWeek(weekNum);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
 
   const dayNames = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
-  const weekNum = calcCurrentWeek();
   const programWeek = PROGRAM[weekNum];
 
-  // Identificar qual é o "próximo treino" (a partir de hoje, primeiro com atividade)
+  // Atualiza título e navegação
+  const isCurrentWeek = weekNum === currentWeek;
+  const titleEl = document.getElementById('weekTitle');
+  const subtitleEl = document.getElementById('weekSubtitle');
+  if (titleEl) {
+    titleEl.textContent = isCurrentWeek
+      ? `📆 Esta semana (semana ${weekNum})`
+      : `📆 Semana ${weekNum}` + (weekNum < currentWeek ? ' (passada)' : ' (futura)');
+  }
+  if (subtitleEl) {
+    const phase = programWeek?.phase || '';
+    const fmtRange = `${monday.getDate()}/${monday.getMonth()+1} – ${sunday.getDate()}/${sunday.getMonth()+1}`;
+    subtitleEl.innerHTML = `<strong>${fmtRange}</strong> ${phase ? '• ' + phase : ''}` +
+      (!isCurrentWeek ? ` <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-left:6px;" onclick="navWeek(0)">⏎ Voltar à atual</button>` : '');
+  }
+
+  // Habilita/desabilita botões nav
+  const prevBtn = document.getElementById('weekNavPrev');
+  const nextBtn = document.getElementById('weekNavNext');
+  if (prevBtn) prevBtn.disabled = (weekNum <= 1);
+  if (nextBtn) nextBtn.disabled = (weekNum >= 24);
+
+  // "Próximo treino" só faz sentido se estamos vendo a semana atual ou futura
   let nextDayIdx = -1;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    if (d < today) continue;
+  if (weekNum >= currentWeek) {
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      if (d < today) continue;
 
-    const dow_js = d.getDay();
-    const todayISO = toISODate(d);
-
-    // Verifica se há treino planejado
-    const hasRun = (dow_js === 2 || dow_js === 4 || dow_js === 0) && programWeek;
-    const hasExtra = WEEKLY_EXTRAS[dow_js] && WEEKLY_EXTRAS[dow_js].length > 0;
-
-    // Verifica se já foi registrado como Sim
-    const wasDone = sessions.some(s =>
-      toISODate(s.dataObj) === todayISO && s.concluido === 'Sim'
-    );
-
-    if ((hasRun || hasExtra) && !wasDone && d >= today) {
-      nextDayIdx = i;
-      break;
+      const dow_js = d.getDay();
+      const todayISO = toISODate(d);
+      const hasRun = (dow_js === 2 || dow_js === 4 || dow_js === 0) && programWeek;
+      const hasExtra = WEEKLY_EXTRAS[dow_js] && WEEKLY_EXTRAS[dow_js].length > 0;
+      const wasDone = sessions.some(s =>
+        toISODate(s.dataObj) === todayISO && s.concluido === 'Sim'
+      );
+      if ((hasRun || hasExtra) && !wasDone && d >= today) {
+        nextDayIdx = i;
+        break;
+      }
     }
   }
 
@@ -1398,13 +1537,11 @@ function renderWeekOverview() {
     const dow_js = d.getDay();
     const isToday = toISODate(d) === toISODate(today);
     const isPast = d < today && !isToday;
-    const isNext = i === nextDayIdx;
+    const isNext = i === nextDayIdx && isCurrentWeek;
     const todayISO = toISODate(d);
 
-    // O que tem nesse dia?
     let activities = [];
 
-    // Corrida?
     if (programWeek) {
       let runObj = null;
       if (dow_js === 2) runObj = programWeek.runs.ter;
@@ -1413,29 +1550,22 @@ function renderWeekOverview() {
 
       if (runObj) {
         activities.push({
-          type: 'corrida',
-          icon: '🏃',
-          label: 'Corrida',
-          detail: runObj.summary,
-          time: runObj.total + 'min'
+          type: 'corrida', icon: '🏃', label: 'Corrida',
+          detail: runObj.summary, time: runObj.total + 'min'
         });
       }
     }
 
-    // Extras (Força, Muay Thai)
     (WEEKLY_EXTRAS[dow_js] || []).forEach(e => {
       const icon = e.activity === 'MuayThai' ? '🥊' : '💪';
       const cls = e.activity.toLowerCase();
       activities.push({
-        type: cls,
-        icon,
+        type: cls, icon,
         label: e.activity === 'MuayThai' ? 'Muay Thai' : 'Força',
-        detail: e.tipo,
-        time: '~60min'
+        detail: e.tipo, time: '~60min'
       });
     });
 
-    // Status (feito/não/parcial)
     const daySessions = sessions.filter(s => toISODate(s.dataObj) === todayISO);
     const allDone = activities.length > 0 && activities.every(a => {
       const actName = a.label === 'Muay Thai' ? 'MuayThai' : a.label === 'Força' ? 'Forca' : 'Corrida';
@@ -1449,7 +1579,7 @@ function renderWeekOverview() {
     let classes = ['day-card'];
     if (activities.length === 0) classes.push('rest');
     if (isPast) classes.push('past');
-    if (isToday) classes.push('next');
+    if (isToday && isCurrentWeek) classes.push('next');
     if (isNext && !isToday) classes.push('next-badge');
 
     let statusIcon = '';
@@ -1471,7 +1601,7 @@ function renderWeekOverview() {
     }
 
     html += `
-      <div class="${classes.join(' ')}" onclick='openDayDetail(${i}, "${todayISO}")'>
+      <div class="${classes.join(' ')}" onclick='openDayDetail(${i}, ${weekNum}, "${todayISO}")'>
         <div class="day-name">${dayNames[i]}</div>
         <div class="day-date">${d.getDate()}/${d.getMonth()+1}</div>
         ${content}
@@ -1481,20 +1611,71 @@ function renderWeekOverview() {
   }
 
   document.getElementById('weekOverview').innerHTML = html;
+
+  // Atualizar a grid compacta 24 semanas
+  renderWeeks24Compact();
 }
 
-function openDayDetail(dayIdx, dateISO) {
-  // Quando clica num dia, mostra modal com detalhes
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const dayIdxToday = (today.getDay() + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - dayIdxToday);
+// Navegação entre semanas (delta: -1 anterior, +1 próxima, 0 = voltar à atual)
+function navWeek(delta) {
+  const currentWeek = calcCurrentWeek();
+  if (delta === 0) {
+    viewingWeek = currentWeek;
+  } else {
+    const newWeek = (viewingWeek || currentWeek) + delta;
+    if (newWeek < 1 || newWeek > 24) return;
+    viewingWeek = newWeek;
+  }
+  renderWeekOverview();
+  // Scroll suave para a seção
+  document.getElementById('weekOverview')?.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
 
+// Grid compacta 24 semanas — cada quadradinho é clicável
+function renderWeeks24Compact() {
+  const container = document.getElementById('weeks24Row');
+  if (!container) return;
+  const currentWeek = calcCurrentWeek();
+
+  let html = '';
+  for (let w = 1; w <= 24; w++) {
+    // Quantas corridas Sim nessa semana
+    const wCorridas = sessions.filter(s =>
+      s.atividade === 'Corrida' && s.semana === w && s.concluido === 'Sim'
+    ).length;
+
+    let cls = 'week24-cell';
+    if (w === currentWeek) cls += ' current';
+    if (w === viewingWeek && w !== currentWeek) cls += ' selected';
+    if (w < currentWeek) {
+      if (wCorridas >= 3) cls += ' done';
+      else if (wCorridas === 2) cls += ' partial';
+      else cls += ' missed';
+    } else if (w > currentWeek) {
+      cls += ' future';
+    } else if (w === currentWeek) {
+      // semana atual: mostra parcial se já tem alguma feita
+      if (wCorridas >= 3) cls += ' done';
+      else if (wCorridas >= 1) cls += ' partial';
+    }
+
+    const tooltip = `Semana ${w}: ${wCorridas}/3 corridas`;
+    html += `<div class="${cls}" onclick="navToWeek(${w})" title="${tooltip}">${w}</div>`;
+  }
+  container.innerHTML = html;
+}
+
+function navToWeek(w) {
+  viewingWeek = w;
+  renderWeekOverview();
+  document.getElementById('weekOverview')?.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function openDayDetail(dayIdx, weekNum, dateISO) {
+  const monday = getMondayOfWeek(weekNum);
   const d = new Date(monday);
   d.setDate(monday.getDate() + dayIdx);
   const dow_js = d.getDay();
-  const weekNum = calcCurrentWeek();
   const programWeek = PROGRAM[weekNum];
 
   let activities = [];
@@ -1506,7 +1687,7 @@ function openDayDetail(dayIdx, dateISO) {
     if (runObj) {
       activities.push({
         type: 'Corrida', icon: '🏃', label: 'Corrida',
-        runDetail: runObj
+        runDetail: runObj, tipo: detectRunType(runObj.summary)
       });
     }
   }
@@ -1524,23 +1705,60 @@ function openDayDetail(dayIdx, dateISO) {
     return;
   }
 
-  // Monta conteúdo do modal
+  // Verificar se já registrado
+  const daySessions = sessions.filter(s => toISODate(s.dataObj) === dateISO);
+
   let content = '<div style="font-weight: 700; color: var(--navy); margin-bottom: 12px;">' +
-                fmtDateLong(d) + '</div>';
-  activities.forEach(a => {
+                fmtDateLong(d) + ' — Semana ' + weekNum + '</div>';
+
+  activities.forEach((a, idx) => {
+    const actName = a.label === 'Muay Thai' ? 'MuayThai' : a.label === 'Força' ? 'Forca' : 'Corrida';
+    const existing = daySessions.find(s => s.atividade === actName);
+    const statusLabel = existing ? (
+      existing.concluido === 'Sim' ? '<span style="color: var(--green); font-weight: 700;">✓ Feito</span>' :
+      existing.concluido === 'Nao' ? '<span style="color: var(--red); font-weight: 700;">✗ Não feito</span>' :
+      existing.concluido === 'Parcial' ? '<span style="color: #f0ad4e; font-weight: 700;">~ Parcial</span>' : ''
+    ) : '<span style="color: var(--grey-light); font-size: 11px;">Não registrado</span>';
+
     content += `<div style="background: var(--lighter); padding: 12px; border-radius: 8px; margin-bottom: 10px;">`;
-    content += `<div style="font-weight: 700; color: var(--navy); margin-bottom: 6px;">${a.icon} ${a.label}</div>`;
+    content += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">`;
+    content += `<div style="font-weight: 700; color: var(--navy);">${a.icon} ${a.label}</div>`;
+    content += `<div>${statusLabel}</div>`;
+    content += `</div>`;
     if (a.runDetail) {
-      content += renderWorkoutDetail(a.runDetail, 'day-' + dayIdx);
+      content += renderWorkoutDetail(a.runDetail, 'day-' + weekNum + '-' + dayIdx);
     } else {
       content += `<div style="font-size: 13px; color: var(--grey);"><strong>${a.tipo}</strong></div>`;
       content += `<div style="font-size: 12px; color: var(--grey-light); margin-top: 4px;">${a.desc}</div>`;
     }
+    // Botão para registrar/editar este dia
+    content += `<div style="margin-top: 10px; text-align: right;">`;
+    content += `<button class="btn btn-primary" onclick='openDayActivityModal("${dateISO}", "${actName}", "${a.tipo}")'>`;
+    content += existing ? '✏️ Editar este treino' : '+ Registrar este treino';
+    content += `</button></div>`;
     content += '</div>';
   });
 
-  // Modal customizado simples
   showDayModal(content);
+}
+
+// Abre modal completo pré-preenchido para um dia/atividade específicos
+function openDayActivityModal(dateISO, activity, tipo) {
+  // Fecha o modal de dia
+  const dayModal = document.getElementById('dayDetailModal');
+  if (dayModal) dayModal.remove();
+
+  // Encontra sessão existente (se houver) para edit
+  const existing = sessions.find(s =>
+    toISODate(s.dataObj) === dateISO && s.atividade === activity
+  );
+
+  openFullModal({
+    data: dateISO,
+    atividade: activity,
+    tipo: tipo,
+    existing: existing
+  });
 }
 
 function showDayModal(content) {
@@ -1908,13 +2126,13 @@ function renderAll() {
     }
   };
 
+  safeCall('renderMotivationalQuote', renderMotivationalQuote);
   safeCall('renderToday', renderToday);
   safeCall('renderWeekOverview', renderWeekOverview);
   safeCall('renderKPIs', renderKPIs);
   safeCall('renderSummaries', renderSummaries);
   safeCall('renderProgress', renderProgress);
   safeCall('renderCharts', renderCharts);
-  safeCall('renderWeekGrid', renderWeekGrid);
   safeCall('renderSessionLog', renderSessionLog);
   safeCall('renderInsight', renderInsight);
 }
@@ -2277,26 +2495,179 @@ function renderCharts() {
   });
 }
 
-function renderWeekGrid() {
-  const grid = document.getElementById('weekGrid');
-  const cw = calcCurrentWeek();
-  let html = '';
-  for (let w = 1; w <= 24; w++) {
-    const wCorridas = sessions.filter(s =>
-      s.atividade === 'Corrida' && s.semana === w && s.concluido === 'Sim').length;
-    let cls = '';
-    if (w === cw) cls = 'current';
-    else if (w < cw) {
-      if (wCorridas >= 3) cls = 'done';
-      else if (wCorridas === 2) cls = 'partial';
-      else cls = 'missed';
-    }
-    html += `<div class="week-cell ${cls}">
-      <span class="num">S${w}</span>
-      <span class="ratio">${wCorridas}/3</span>
-    </div>`;
+// ============================================================
+// FRASES MOTIVACIONAIS — contextuais
+// ============================================================
+const QUOTES = {
+  // Antes do primeiro treino do dia (manhã/cedo)
+  before_workout: [
+    { t: "Apareça. O resto vem depois.", a: "" },
+    { t: "Você não precisa estar motivada. Você precisa começar.", a: "" },
+    { t: "Cada passo conta. Mesmo os lentos.", a: "" },
+    { t: "Trinta minutos hoje valem mais que três horas semana que vem.", a: "" },
+    { t: "Comece devagar. Só não pare.", a: "" },
+    { t: "O melhor momento para correr era anos atrás. O segundo melhor é hoje.", a: "" },
+    { t: "Seu corpo aguenta. É a mente que precisa de convencimento.", a: "" },
+    { t: "Não é sobre velocidade. É sobre aparecer.", a: "" },
+    { t: "Z2 hoje, 5K em alguns meses.", a: "Específico ao programa" },
+    { t: "Cada corrida em Z2 está construindo a base para os 5 km.", a: "Específico ao programa" },
+  ],
+  // Quando já treinou hoje
+  after_done: [
+    { t: "Feito é melhor que perfeito. Você apareceu.", a: "" },
+    { t: "Você fez o que precisava ser feito. Orgulhe-se.", a: "" },
+    { t: "Mais uma sessão. Mais um tijolinho.", a: "" },
+    { t: "É assim que se constrói um hábito: um dia de cada vez.", a: "" },
+    { t: "Hoje você foi mais forte do que ontem.", a: "" },
+    { t: "Recupere bem. O próximo treino agradece.", a: "" },
+    { t: "✓ Treino feito. Agora hidrate, coma direito e descanse.", a: "" },
+    { t: "Você está mais perto dos 5K do que estava ontem.", a: "Específico ao programa" },
+  ],
+  // Quando faltou no dia anterior
+  after_missed: [
+    { t: "Um dia perdido não estraga uma semana. Volte hoje.", a: "" },
+    { t: "Não foi ontem. Vai ser hoje. Sem dramas.", a: "" },
+    { t: "Falhar e voltar é parte do processo. Bem-vinda à parte humana.", a: "" },
+    { t: "Recomeçar é mais valioso do que nunca ter parado.", a: "" },
+    { t: "Você não precisa compensar. Só precisa continuar.", a: "" },
+    { t: "Pular um dia acontece. Pular dois não.", a: "" },
+  ],
+  // Dia de descanso
+  rest_day: [
+    { t: "Descansar também é treinar. Seu corpo está se adaptando.", a: "" },
+    { t: "É no descanso que os ganhos acontecem.", a: "" },
+    { t: "Sem culpa: hoje é dia de não fazer nada (de exercício).", a: "" },
+    { t: "Adaptação > Esforço. Confie no plano.", a: "" },
+    { t: "Hidrate, durma bem, alongue se quiser. Amanhã é outro dia.", a: "" },
+  ],
+  // Semana 1 (início)
+  week1: [
+    { t: "Bem-vinda ao começo. As primeiras semanas são pesadas, depois fica natural.", a: "" },
+    { t: "Não compare seu dia 1 com o dia 100 de alguém.", a: "" },
+    { t: "Devagar e sempre. A pressa atrapalha mais do que ajuda.", a: "" },
+  ],
+  // Marcos especiais
+  milestones: [
+    { t: "Semana de teste. Confie no que construiu. Você consegue.", a: "Em semana de teste" },
+    { t: "Primeiro 5K se aproximando. Você está mais pronta do que pensa.", a: "Próximo ao primeiro 5K" },
+  ],
+};
+
+// Hash determinístico simples para sortear consistentemente por dia
+function dailySeed(extra = '') {
+  const today = new Date();
+  const s = today.getFullYear() + '-' + today.getMonth() + '-' + today.getDate() + '-' + extra;
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash) + s.charCodeAt(i);
+    hash |= 0;
   }
-  grid.innerHTML = html;
+  return Math.abs(hash);
+}
+
+function pickQuote(pool, extra = '') {
+  if (!pool || pool.length === 0) return null;
+  const idx = dailySeed(extra) % pool.length;
+  return pool[idx];
+}
+
+function renderMotivationalQuote() {
+  const el = document.getElementById('motivationalQuote');
+  const textEl = document.getElementById('quoteText');
+  const authorEl = document.getElementById('quoteAuthor');
+  const iconEl = el?.querySelector('.quote-icon');
+  if (!textEl) return;
+
+  const today = new Date();
+  const todayISO = toISODate(today);
+  const dow = today.getDay();
+  const currentWeek = calcCurrentWeek();
+
+  // Verifica contexto
+  const isRestDay = ![0, 1, 2, 3, 4, 5, 6].some(d => false) && // simplifica
+    !((dow === 2 || dow === 4 || dow === 0) || (WEEKLY_EXTRAS[dow]?.length > 0));
+
+  const todayDone = sessions.some(s =>
+    toISODate(s.dataObj) === todayISO && s.concluido === 'Sim'
+  );
+
+  // Verifica se ontem teve treino planejado e foi faltado
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yISO = toISODate(yesterday);
+  const yDow = yesterday.getDay();
+  const yHadPlanned = (yDow === 2 || yDow === 4 || yDow === 0) || (WEEKLY_EXTRAS[yDow]?.length > 0);
+  const yWasDone = sessions.some(s =>
+    toISODate(s.dataObj) === yISO && s.concluido === 'Sim'
+  );
+  const yMissed = yHadPlanned && !yWasDone;
+
+  // Lógica de seleção (do mais específico para o mais genérico):
+  let pool, icon = '💪', extraSeed = '';
+  let quote = null;
+
+  // 1) Marcos especiais (testes, primeiro 5K)
+  const programWeek = PROGRAM[currentWeek];
+  let isTestWeek = false;
+  if (programWeek?.runs) {
+    isTestWeek = Object.values(programWeek.runs).some(r => r.isTest || r.isMilestone);
+  }
+  if (isTestWeek) {
+    pool = QUOTES.milestones;
+    icon = '🎯';
+    extraSeed = 'milestone';
+    quote = pickQuote(pool, extraSeed);
+  }
+
+  // 2) Já treinou hoje → celebração
+  if (!quote && todayDone) {
+    pool = QUOTES.after_done;
+    icon = '🎉';
+    extraSeed = 'done';
+    quote = pickQuote(pool, extraSeed);
+  }
+
+  // 3) Faltou ontem → retomada
+  if (!quote && yMissed) {
+    pool = QUOTES.after_missed;
+    icon = '💪';
+    extraSeed = 'missed';
+    quote = pickQuote(pool, extraSeed);
+  }
+
+  // 4) Semana 1 → frases de início
+  if (!quote && currentWeek === 1) {
+    pool = QUOTES.week1;
+    icon = '🌱';
+    extraSeed = 'w1';
+    quote = pickQuote(pool, extraSeed);
+  }
+
+  // 5) Dia sem treino planejado → descanso
+  if (!quote) {
+    const hasRunToday = (dow === 2 || dow === 4 || dow === 0);
+    const hasExtraToday = (WEEKLY_EXTRAS[dow]?.length > 0);
+    if (!hasRunToday && !hasExtraToday) {
+      pool = QUOTES.rest_day;
+      icon = '☕';
+      extraSeed = 'rest';
+      quote = pickQuote(pool, extraSeed);
+    }
+  }
+
+  // 6) Padrão: antes do treino
+  if (!quote) {
+    pool = QUOTES.before_workout;
+    icon = '🏃‍♀️';
+    extraSeed = 'before';
+    quote = pickQuote(pool, extraSeed);
+  }
+
+  if (quote) {
+    textEl.textContent = '"' + quote.t + '"';
+    authorEl.textContent = quote.a || '';
+    if (iconEl) iconEl.textContent = icon;
+  }
 }
 
 function renderSessionLog() {
