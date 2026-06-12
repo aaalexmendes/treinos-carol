@@ -947,6 +947,7 @@
       <div class="tab active" data-activity="Corrida" onclick="switchTab('Corrida')">🏃 Corrida</div>
       <div class="tab" data-activity="MuayThai" onclick="switchTab('MuayThai')">🥊 Muay Thai</div>
       <div class="tab" data-activity="Forca" onclick="switchTab('Forca')">💪 Força</div>
+      <div class="tab" data-activity="Outro" onclick="switchTab('Outro')">➕ Outro</div>
     </div>
 
     <form id="trainForm" onsubmit="submitForm(event)">
@@ -1040,6 +1041,18 @@
             <label>Duração (min)</label>
             <input type="number" id="f_duracao_forca" placeholder="ex: 60">
           </div>
+        </div>
+      </div>
+
+      <div id="fields_outro" class="field-group hidden">
+        <div class="group-title">Outro tipo de treino</div>
+        <div class="field">
+          <label>Nome da atividade</label>
+          <input type="text" id="f_tipo_outro" placeholder="ex: Yoga, Pilates, Caminhada, Spinning, Natação...">
+        </div>
+        <div class="field">
+          <label>Duração (min)</label>
+          <input type="number" id="f_duracao_outro" placeholder="ex: 60">
         </div>
       </div>
 
@@ -1879,7 +1892,8 @@ function openFullModal(prefill) {
   // Reset
   document.getElementById('f_concluido').value = 'Sim';
   ['f_distancia','f_pace','f_fc_media','f_fc_max','f_duracao_corrida',
-   'f_duracao_mt','f_duracao_forca','f_calorias','f_peso','f_notas'].forEach(id => {
+   'f_duracao_mt','f_duracao_forca','f_tipo_outro','f_duracao_outro',
+   'f_calorias','f_peso','f_notas'].forEach(id => {
     document.getElementById(id).value = '';
   });
   selectedRPE = null;
@@ -1897,6 +1911,7 @@ function openFullModal(prefill) {
       document.getElementById('f_duracao_corrida').value = e.duracao;
       document.getElementById('f_duracao_mt').value = e.duracao;
       document.getElementById('f_duracao_forca').value = e.duracao;
+      document.getElementById('f_duracao_outro').value = e.duracao;
     }
     if (e.calorias) document.getElementById('f_calorias').value = e.calorias;
     if (e.peso) document.getElementById('f_peso').value = e.peso;
@@ -1911,6 +1926,7 @@ function openFullModal(prefill) {
     if (targetActivity === 'Corrida') document.getElementById('f_tipo_corrida').value = prefill.tipo;
     else if (targetActivity === 'MuayThai') document.getElementById('f_tipo_muaythai').value = prefill.tipo;
     else if (targetActivity === 'Forca') document.getElementById('f_tipo_forca').value = prefill.tipo;
+    else if (targetActivity === 'Outro') document.getElementById('f_tipo_outro').value = prefill.tipo;
   }
 
   const plannedInfo = document.getElementById('modalPlannedInfo');
@@ -1945,6 +1961,7 @@ function switchTab(activity) {
   document.getElementById('fields_corrida').classList.toggle('hidden', activity !== 'Corrida');
   document.getElementById('fields_muaythai').classList.toggle('hidden', activity !== 'MuayThai');
   document.getElementById('fields_forca').classList.toggle('hidden', activity !== 'Forca');
+  document.getElementById('fields_outro').classList.toggle('hidden', activity !== 'Outro');
 }
 
 function getActiveActivity() {
@@ -1993,6 +2010,16 @@ async function submitForm(event) {
   } else if (atividade === 'Forca') {
     payload.tipo = document.getElementById('f_tipo_forca').value;
     payload.duracao = document.getElementById('f_duracao_forca').value || '';
+  } else if (atividade === 'Outro') {
+    const nomeAtividade = document.getElementById('f_tipo_outro').value.trim();
+    if (!nomeAtividade) {
+      showToast('❌ Informe o nome da atividade', true);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Salvar treino';
+      return;
+    }
+    payload.tipo = nomeAtividade;
+    payload.duracao = document.getElementById('f_duracao_outro').value || '';
   }
 
   await sendToServer(payload, '✓ Treino salvo!', 'modal');
@@ -2692,6 +2719,18 @@ function renderSessionLog() {
                 : s.atividade === 'MuayThai' ? '🥊'
                 : s.atividade === 'Forca' ? '💪' : '🏋️';
 
+    // Nome a exibir: para "Outro", o "tipo" tem o nome customizado (Yoga, Pilates etc)
+    const nomeAtividade = s.atividade === 'Outro' && s.tipo
+      ? s.tipo
+      : (s.atividade === 'MuayThai' ? 'Muay Thai'
+         : s.atividade === 'Forca' ? 'Força'
+         : s.atividade);
+
+    // Para "Outro" o "tipo" já está sendo usado como nome, então o badge mostra "Outro"
+    const tipoBadge = s.atividade === 'Outro'
+      ? 'Outro'
+      : (s.tipo || s.atividade);
+
     const metrics = [];
     if (s.distancia > 0) metrics.push(`📏 ${s.distancia.toFixed(2)} km`);
     if (s.pace > 0) metrics.push(`⏱️ ${s.pace.toFixed(2)}/km`);
@@ -2704,8 +2743,8 @@ function renderSessionLog() {
     return `
       <div class="${cls}">
         <div class="date">
-          <span>${emoji} ${fmtDate(s.dataObj)} • Semana ${s.semana}</span>
-          <span class="tipo">${s.tipo || s.atividade}</span>
+          <span>${emoji} ${fmtDate(s.dataObj)} • Semana ${s.semana} • <strong>${nomeAtividade}</strong></span>
+          <span class="tipo">${tipoBadge}</span>
         </div>
         <div class="metrics">${metrics.map(m => `<span>${m}</span>`).join('')}</div>
         ${s.notas ? `<div class="notes">"${s.notas}"</div>` : ''}
